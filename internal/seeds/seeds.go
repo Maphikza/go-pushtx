@@ -29,6 +29,24 @@ var (
 		"seed.tbtc.petertodd.org",
 		"testnet-seed.bluematt.me",
 	}
+
+	// Add known reliable and available nodes
+	reliableMainnetNodes = []string{
+		"178.128.221.177:8333",
+		"74.213.175.99:8333",
+		"89.117.19.191:8333",
+		"129.80.4.58:8333",
+	}
+
+	reliableTestnetNodes = []string{
+		"80.114.119.141:18333",
+		"74.213.175.99:18333",
+		"89.117.19.191:18333",
+	}
+
+	reliableSigNetNodes = []string{
+		"178.128.221.177:38333",
+	}
 )
 
 // ResolveDNS resolves DNS seeds for the given network and returns a list of peer addresses
@@ -58,7 +76,6 @@ func ResolveDNS(params *chaincfg.Params) []netpkg.Service {
 			if err != nil {
 				return
 			}
-
 			var services []netpkg.Service
 			for _, addr := range addrs {
 				service, err := netpkg.ParseService(net.JoinHostPort(addr, defaultPort))
@@ -83,28 +100,43 @@ func ResolveDNS(params *chaincfg.Params) []netpkg.Service {
 	return allServices
 }
 
-// GetFixed returns a list of fixed seed nodes for the given network
+// GetFixed returns a list of fixed seed nodes for the given network, starting with known reliable nodes
 func GetFixed(params *chaincfg.Params) []netpkg.Service {
 	var filename string
+	var reliableNodes []string
+
 	switch params.Net {
 	case chaincfg.MainNetParams.Net:
 		filename = "mainnet.txt"
+		reliableNodes = reliableMainnetNodes
 	case chaincfg.TestNet3Params.Net:
 		filename = "testnet.txt"
+		reliableNodes = reliableTestnetNodes
 	case chaincfg.SigNetParams.Net:
 		filename = "signet.txt"
+		reliableNodes = reliableSigNetNodes
 	default:
 		return nil
 	}
 
+	var services []netpkg.Service
+
+	// First, add the reliable nodes
+	for _, addr := range reliableNodes {
+		service, err := netpkg.ParseService(addr)
+		if err == nil {
+			services = append(services, service)
+		}
+	}
+
+	// Then, add nodes from the file
 	path := filepath.Join("data", filename)
 	file, err := os.Open(path)
 	if err != nil {
-		return nil
+		return services // Return the reliable nodes if file can't be opened
 	}
 	defer file.Close()
 
-	var services []netpkg.Service
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		addr := strings.TrimSpace(scanner.Text())
